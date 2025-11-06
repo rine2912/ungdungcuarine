@@ -25,36 +25,35 @@ jobs:
           sudo apt install -y python3-pip zip unzip openjdk-17-jdk wget git
           pip install --upgrade pip setuptools wheel cython buildozer
 
-      # 4️⃣ Install Android SDK & AIDL (fixed + safe version)
+      # 4️⃣ Install Android SDK (fixed path + AIDL fix)
       - name: Install Android SDK & AIDL
         run: |
           echo "📦 Installing Android SDK..."
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
 
-          # ✅ Download the latest Commandline Tools (fix sdkmanager missing)
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O tools.zip
-          unzip -q tools.zip
-          rm tools.zip
-          mkdir -p $HOME/android-sdk/cmdline-tools/latest
-          mv cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/ || true
+          # Download and unzip SDK tools
+          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O tools.zip
+          unzip tools.zip
+          mv cmdline-tools latest  # Đặt đúng cấu trúc: cmdline-tools/latest/bin
 
-          # ✅ Set environment paths
+          # Set environment variables
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
 
-          echo "🔍 Checking sdkmanager..."
-          which sdkmanager || (echo "❌ sdkmanager not found!"; exit 1)
+          echo "✅ sdkmanager location:"
+          which sdkmanager || echo "❌ sdkmanager not found!"
 
-          # ✅ Accept all licenses and install essential components
+          # Accept licenses and install build tools
           yes | sdkmanager --licenses || true
-          sdkmanager --update || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" || true
+          sdkmanager --update
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-          # ✅ Check AIDL
-          echo "🔍 Checking for AIDL..."
-          find $ANDROID_HOME -name aidl || echo "⚠️ AIDL not found (will be installed automatically)"
-          echo "✅ Android SDK installation completed."
+          # 🔧 Fix missing AIDL and build-tools path (quan trọng)
+          mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools
+          cp -r $ANDROID_HOME/build-tools/* ~/.buildozer/android/platform/android-sdk/build-tools/ || true
+
+          find $ANDROID_HOME -name aidl || echo "⚠️ AIDL missing!"
 
       # 5️⃣ Build APK with Buildozer
       - name: Build APK with Buildozer
@@ -64,19 +63,18 @@ jobs:
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
           export PATH=$JAVA_HOME/bin:$PATH
 
-          # Initialize buildozer.spec if missing
+          # Init buildozer.spec if missing
           if [ ! -f buildozer.spec ]; then
             buildozer init
           fi
 
-          # Auto-adjust buildozer settings
+          # Adjust basic settings
           sed -i 's/source.main = main.py/source.main = code.py/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = ungdungrine/' buildozer.spec
           sed -i 's/title = My Application/title = Ứng dụng của Rine/' buildozer.spec
           sed -i 's/# (str) Application versioning (method 1)/version = 1.0.0/' buildozer.spec
 
-          # Build APK (retry if needed)
-          echo "⚙️ Building APK..."
+          # Build APK
           buildozer -v android debug || (echo "⚠️ Build failed, retrying clean build..." && buildozer android clean && buildozer -v android debug)
 
       # 6️⃣ Upload APK artifact

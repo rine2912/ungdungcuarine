@@ -1,4 +1,4 @@
-name: Build APK (Fixed AIDL)
+name: Build APK (Fixed SDK Path)
 
 on:
   workflow_dispatch:
@@ -27,16 +27,16 @@ jobs:
         mkdir -p $HOME/android-sdk/cmdline-tools
         cd $HOME/android-sdk/cmdline-tools
         wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        unzip commandlinetools-linux-9477386_latest.zip -d latest
+        unzip commandlinetools-linux-9477386_latest.zip -d cmdline-tools
         export ANDROID_HOME=$HOME/android-sdk
-        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
-        yes | sdkmanager --licenses
-        sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools"
+        export PATH=$ANDROID_HOME/cmdline-tools/cmdline-tools/bin:$ANDROID_HOME/platform-tools:$PATH
+        yes | $ANDROID_HOME/cmdline-tools/cmdline-tools/bin/sdkmanager --licenses
+        $ANDROID_HOME/cmdline-tools/cmdline-tools/bin/sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools"
 
     - name: Build APK
       run: |
         export ANDROID_HOME=$HOME/android-sdk
-        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+        export PATH=$ANDROID_HOME/cmdline-tools/cmdline-tools/bin:$ANDROID_HOME/platform-tools:$PATH
         buildozer -v android debug
 
     - name: Upload APK

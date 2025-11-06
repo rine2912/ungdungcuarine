@@ -1,4 +1,4 @@
-name: Build APK (Fixed SDK Path)
+name: Build APK (Fast)
 
 on:
   workflow_dispatch:
@@ -18,34 +18,37 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt update
-        sudo apt install -y git zip unzip openjdk-17-jdk wget python3-pip build-essential libssl-dev libffi-dev python3-dev libsqlite3-dev
+        sudo apt update -y
+        sudo apt install -y python3-pip git zip unzip openjdk-17-jdk wget
+        pip install --upgrade pip setuptools wheel buildozer cython virtualenv
 
-    - name: Install Android SDK
+    - name: Install Android SDK & AIDL
       run: |
         mkdir -p $HOME/android-sdk/cmdline-tools
         cd $HOME/android-sdk/cmdline-tools
         wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        unzip commandlinetools-linux-9477386_latest.zip
+        unzip -q commandlinetools-linux-9477386_latest.zip
         mv cmdline-tools latest
         export ANDROID_HOME=$HOME/android-sdk
-        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools"
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+        yes | sdkmanager --licenses
+        sdkmanager --install "platform-tools" "build-tools;33.0.2" "platforms;android-33" "cmdline-tools;latest"
+        sdkmanager --update
 
-    - name: Install Buildozer
-      run: |
-        python3 -m pip install --upgrade pip
-        pip install buildozer cython virtualenv
-
-    - name: Build APK
+    - name: Build APK with Buildozer
       run: |
         export ANDROID_HOME=$HOME/android-sdk
         export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+        buildozer init
+        sed -i 's/source.include_exts = py, kv, atlas/source.include_exts = py, kv, png, jpg, mp3, wav, json/' buildozer.spec
+        sed -i 's/title = My Application/title = Ứng dụng của Rine/' buildozer.spec
+        sed -i 's/package.name = myapp/package.name = ungdungrine/' buildozer.spec
+        sed -i 's/source.main = main.py/source.main = code.py/' buildozer.spec
+        sed -i 's/# (str) Application versioning (method 1)/version = 1.0.0/' buildozer.spec
         buildozer -v android debug
 
     - name: Upload APK
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v3
       with:
-        name: App-Release
+        name: app-release
         path: bin/*.apk

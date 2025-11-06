@@ -1,4 +1,4 @@
-name: Build APK (Fixed + Stable)
+name: Build APK (Final Stable)
 
 on:
   workflow_dispatch:
@@ -8,51 +8,51 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Lấy mã nguồn
+      # 1️⃣ Checkout source
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ Cài Python
+      # 2️⃣ Setup Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # 3️⃣ Cài đặt thư viện & buildozer
+      # 3️⃣ Install dependencies
       - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y python3-pip zip unzip openjdk-17-jdk wget git
           pip install --upgrade pip setuptools wheel cython buildozer
 
-      # 4️⃣ Cài đặt Android SDK chuẩn
+      # 4️⃣ Install Android SDK (fixed path issue)
       - name: Install Android SDK & AIDL
         run: |
           echo "📦 Installing Android SDK..."
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
 
-          # Tải công cụ SDK chính thức từ Google
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O tools.zip
-          unzip tools.zip -d latest
+          # Download and unzip SDK tools
+          wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O tools.zip
+          unzip tools.zip
+          mv cmdline-tools latest  # Đặt đúng cấu trúc: cmdline-tools/latest/bin
 
-          # Thiết lập biến môi trường
+          # Set environment variables
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
 
-          # Kiểm tra sdkmanager
-          echo "✅ SDKManager location:"
-          which sdkmanager || echo "⚠️ sdkmanager not found"
+          echo "✅ sdkmanager location:"
+          which sdkmanager || echo "❌ sdkmanager not found!"
 
-          # Cài các gói SDK cần thiết
+          # Accept licenses and install build tools
           yes | sdkmanager --licenses
           sdkmanager --update
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-          # Kiểm tra aidl có sẵn không
-          find $ANDROID_HOME -name "aidl" || echo "⚠️ AIDL not found"
+          # Kiểm tra aidl
+          find $ANDROID_HOME -name aidl || echo "⚠️ AIDL missing!"
 
-      # 5️⃣ Build file APK bằng Buildozer
+      # 5️⃣ Build APK with Buildozer
       - name: Build APK with Buildozer
         run: |
           export ANDROID_HOME=$HOME/android-sdk
@@ -60,21 +60,21 @@ jobs:
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
           export PATH=$JAVA_HOME/bin:$PATH
 
-          # Nếu chưa có file buildozer.spec thì tạo mới
+          # Init buildozer.spec if missing
           if [ ! -f buildozer.spec ]; then
             buildozer init
           fi
 
-          # Cập nhật thông tin cơ bản
+          # Adjust basic settings
           sed -i 's/source.main = main.py/source.main = code.py/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = ungdungrine/' buildozer.spec
           sed -i 's/title = My Application/title = Ứng dụng của Rine/' buildozer.spec
           sed -i 's/# (str) Application versioning (method 1)/version = 1.0.0/' buildozer.spec
 
-          # Build APK (clean nếu lỗi)
-          buildozer -v android debug || (echo "⚠️ Build lỗi, thử clean..." && buildozer android clean && buildozer -v android debug)
+          # Build
+          buildozer -v android debug || (echo "⚠️ Build failed, retrying clean build..." && buildozer android clean && buildozer -v android debug)
 
-      # 6️⃣ Upload file APK đã build xong
+      # 6️⃣ Upload APK artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

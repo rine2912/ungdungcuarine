@@ -1,4 +1,4 @@
-name: Build APK (Fast)
+name: Build APK (Fixed & Stable)
 
 on:
   workflow_dispatch:
@@ -8,62 +8,72 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Lấy code trong repo
+      # 1️⃣ Lấy code dự án
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ Cài Python
+      # 2️⃣ Cài đặt Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # 3️⃣ Cài các công cụ cần thiết
+      # 3️⃣ Cài đặt các thư viện cần thiết
       - name: Install dependencies
         run: |
           sudo apt update
           sudo apt install -y python3-pip zip unzip openjdk-17-jdk wget git
-
-          # Cài đặt Buildozer và Cython (tránh lỗi compiler)
           pip install --upgrade pip setuptools wheel cython
           pip install buildozer
 
-      # 4️⃣ Cài đặt Android SDK và AIDL (khắc phục lỗi sdkmanager / aidl)
+      # 4️⃣ Cài đặt Android SDK & AIDL (phiên bản ổn định nhất)
       - name: Install Android SDK & AIDL
         run: |
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          cd $HOME/android-sdk/cmdline-tools
+          # Tạo cấu trúc thư mục SDK chuẩn
+          mkdir -p $HOME/android-sdk/cmdline-tools/latest
+          cd $HOME/android-sdk/cmdline-tools/latest
+
+          # Tải và giải nén command line tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O tools.zip
-          unzip tools.zip -d latest
+          unzip tools.zip
+
+          # Thiết lập biến môi trường
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
-          
-          yes | sdkmanager --licenses || true
-          sdkmanager --update || true
-          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
 
-      # 5️⃣ Build APK bằng Buildozer (có kiểm tra lỗi & fallback)
+          # Kiểm tra sdkmanager
+          echo "✅ SDKManager location:"
+          which sdkmanager || echo "⚠️ sdkmanager not found"
+
+          # Chấp nhận license và cài đặt các thành phần
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --update
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+
+          # Kiểm tra aidl sau khi cài đặt
+          find $ANDROID_HOME -name "aidl" || echo "⚠️ AIDL not found"
+
+      # 5️⃣ Build APK với Buildozer
       - name: Build APK with Buildozer
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
-          
-          # Nếu chưa có file cấu hình thì tạo mới
+
+          # Nếu chưa có file spec thì tạo mới
           if [ ! -f buildozer.spec ]; then
             buildozer init
           fi
-          
-          # Đảm bảo cấu hình phù hợp với dự án
-          sed -i 's/source.include_exts = py, kv, atlas/source.include_exts = py, kv, png, jpg, mp3, wav, json/' buildozer.spec || true
-          sed -i 's/title = My Application/title = Ứng dụng của Rine/' buildozer.spec || true
-          sed -i 's/package.name = myapp/package.name = ungdungrine/' buildozer.spec || true
-          sed -i 's/source.main = main.py/source.main = code.py/' buildozer.spec || true
-          sed -i 's/# (str) Application versioning (method 1)/version = 1.0.0/' buildozer.spec || true
-          
-          # Chạy build APK
-          buildozer -v android debug || (echo "⚠️ Buildozer lỗi, thử lại với clean" && buildozer android clean && buildozer -v android debug)
 
-      # 6️⃣ Upload file APK xuất ra (không bị lỗi version deprecated)
+          # Chỉnh lại cấu hình cơ bản
+          sed -i 's/source.main = main.py/source.main = code.py/' buildozer.spec
+          sed -i 's/package.name = myapp/package.name = ungdungrine/' buildozer.spec
+          sed -i 's/title = My Application/title = Ứng dụng của Rine/' buildozer.spec
+          sed -i 's/# (str) Application versioning (method 1)/version = 1.0.0/' buildozer.spec
+
+          # Build APK debug
+          buildozer -v android debug || (echo "⚠️ Build lỗi, thử lại clean build..." && buildozer android clean && buildozer -v android debug)
+
+      # 6️⃣ Upload file APK đã build xong
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

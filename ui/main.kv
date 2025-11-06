@@ -1,0 +1,154 @@
+#:import Animation kivy.animation.Animation
+ScreenManager:
+    HomeScreen:
+    ConvertScreen:
+    HoroscopeScreen:
+    MusicScreen:
+
+<HomeScreen>:
+    name: "home"
+    FloatLayout:
+        canvas.before:
+            Color:
+                rgba: 1, 0.9, 0.95, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: "💞 ỨNG DỤNG CỦA RINE 💞"
+            font_size: "28sp"
+            pos_hint: {"center_x": 0.5, "top": 0.95}
+            color: 0.8, 0.1, 0.4, 1
+
+        Button:
+            text: "🎵 Nghe nhạc YouTube"
+            size_hint: .7, .1
+            pos_hint: {"center_x": .5, "center_y": .72}
+            on_press: app.root.current = "music"
+
+        Button:
+            text: "🔢 Đổi hệ số"
+            size_hint: .7, .1
+            pos_hint: {"center_x": .5, "center_y": .58}
+            on_press: app.root.current = "convert"
+
+        Button:
+            text: "🔮 Cung hoàng đạo"
+            size_hint: .7, .1
+            pos_hint: {"center_x": .5, "center_y": .44}
+            on_press: app.root.current = "horoscope"
+
+        Button:
+            text: "💗 Thả tim 💗"
+            size_hint: .6, .1
+            pos_hint: {"center_x": .5, "center_y": .28}
+            on_press: app.spawn_hearts_once()
+
+<ConvertScreen>:
+    name: "convert"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 12
+        padding: 20
+        canvas.before:
+            Color:
+                rgba: 1, 0.95, 0.98, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: "🔢 Đổi hệ số"
+            font_size: "22sp"
+            size_hint_y: None
+            height: dp(40)
+        TextInput:
+            id: input_num
+            hint_text: "Nhập số..."
+            size_hint_y: None
+            height: dp(44)
+        TextInput:
+            id: input_from
+            hint_text: "Từ hệ (2,8,10,16)"
+            size_hint_y: None
+            height: dp(44)
+        TextInput:
+            id: input_to
+            hint_text: "Sang hệ (2,8,10,16)"
+            size_hint_y: None
+            height: dp(44)
+        Button:
+            text: "Chuyển đổi"
+            size_hint_y: None
+            height: dp(44)
+            on_press: output.text = app.convert(input_num.text, input_from.text, input_to.text)
+        Label:
+            id: output
+            text: ""
+        Button:
+            text: "← Back"
+            size_hint_y: None
+            height: dp(40)
+            on_press: app.root.current = "home"
+
+<HoroscopeScreen>:
+    name: "horoscope"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 12
+        padding: 20
+        canvas.before:
+            Color:
+                rgba: 1, 0.95, 0.98, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: "🔮 Xem cung hoàng đạo"
+            font_size: "22sp"
+            size_hint_y: None
+            height: dp(40)
+        TextInput:
+            id: input_sign
+            hint_text: "Nhập số cung hoàng đạo (1–12)"
+            size_hint_y: None
+            height: dp(44)
+        Button:
+            text: "Xem hôm nay"
+            size_hint_y: None
+            height: dp(44)
+            on_press: result.text = app.horoscope(input_sign.text)
+        Label:
+            id: result
+            text: ""
+        Button:
+            text: "← Back"
+            size_hint_y: None
+            height: dp(40)
+            on_press: app.root.current = "home"
+
+<MusicScreen>:
+    name: "music"
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 8
+        padding: 12
+        canvas.before:
+            Color:
+                rgba: 1, 0.95, 0.98, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        BoxLayout:
+            size_hint_y: None
+            height: dp(44)
+            TextInput:
+                id: url_input
+                hint_text: "Nhập link YouTube hoặc URL (ví dụ: https://www.youtube.com/watch?v=...)"
+            Button:
+                text: "Phát"
+                size_hint_x: None
+                width: dp(80)
+                on_press: app.play_youtube(url_input.text)
+        Widget:
+            id: webview_holder
+            size_hint_y: 1

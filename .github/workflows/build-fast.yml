@@ -1,4 +1,4 @@
-name: Build APK (Final Stable v2)
+name: Build APK (Final Stable)
 
 on:
   workflow_dispatch:
@@ -6,10 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ANDROID_HOME: ${{ github.workspace }}/android-sdk
-      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:/usr/lib/jvm/java-17-openjdk-amd64/bin:$PATH
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
     steps:
       # 1️⃣ Checkout source
@@ -26,29 +22,35 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y python3-pip zip unzip openjdk-17-jdk wget git libffi-dev libssl-dev
+          sudo apt install -y python3-pip zip unzip openjdk-17-jdk wget git
           pip install --upgrade pip setuptools wheel cython buildozer
 
-      # 4️⃣ Install Android SDK & AIDL
+      # 4️⃣ Install Android SDK (fixed path + AIDL + sdkmanager)
       - name: Install Android SDK & AIDL
         run: |
           echo "📦 Installing Android SDK..."
-          mkdir -p $ANDROID_HOME/cmdline-tools
-          cd $ANDROID_HOME/cmdline-tools
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk/cmdline-tools
 
-          # Download tools
+          # Download and unzip SDK tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O tools.zip
           unzip tools.zip
-          mv cmdline-tools latest
+          mkdir -p $HOME/android-sdk/cmdline-tools/latest
+          mv cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/ || true
 
-          echo "✅ SDK tools extracted!"
+          # Set environment variables
+          export ANDROID_HOME=$HOME/android-sdk
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
 
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+          echo "✅ sdkmanager location:"
+          which sdkmanager || echo "❌ sdkmanager not found!"
+
+          # Accept licenses and install build tools
           yes | sdkmanager --licenses || true
           sdkmanager --update
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;26.1.10909125"
 
-          # Ensure Buildozer SDK path structure
+          # 🔧 Fix missing AIDL + sdkmanager paths for Buildozer
           mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools
           cp -r $ANDROID_HOME/build-tools/* ~/.buildozer/android/platform/android-sdk/build-tools/ || true
 
@@ -62,33 +64,31 @@ jobs:
       # 5️⃣ Build APK with Buildozer
       - name: Build APK with Buildozer
         run: |
-          export ANDROID_HOME=$ANDROID_HOME
-          export JAVA_HOME=$JAVA_HOME
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$PATH
+          export ANDROID_HOME=$HOME/android-sdk
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+          export PATH=$JAVA_HOME/bin:$PATH
 
-          # Init spec if missing
+          # Init buildozer.spec if missing
           if [ ! -f buildozer.spec ]; then
             buildozer init
           fi
 
-          # Adjust Buildozer settings
+          # Adjust basic settings
           sed -i 's/source.main = main.py/source.main = code.py/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = ungdungrine/' buildozer.spec
           sed -i 's/title = My Application/title = Ứng dụng của Rine/' buildozer.spec
           sed -i 's/# (str) Application versioning (method 1)/version = 1.0.0/' buildozer.spec
-          sed -i 's/log_level = 1/log_level = 2/' buildozer.spec || echo "log_level = 2" >> buildozer.spec
 
-          # Clean up environment
-          rm -rf .buildozer/android/platform/python-for-android || true
-
-          echo "🚀 Building APK..."
+          # Build process
+          echo "🚀 Starting Buildozer build..."
           buildozer -v android debug || (
-            echo "⚠️ Build failed, retrying after clean..."
+            echo "⚠️ Build failed, retrying clean build..."
             buildozer android clean
             buildozer -v android debug
           )
 
-      # 6️⃣ Upload APK
+      # 6️⃣ Upload APK artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

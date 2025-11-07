@@ -32,29 +32,37 @@ jobs:
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
 
+          # Download and unzip SDK Tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O tools.zip
-          unzip tools.zip
+          unzip -q tools.zip
           mv cmdline-tools latest
 
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
 
-          echo "✅ sdkmanager path:"; which sdkmanager || echo "❌ sdkmanager not found!"
+          echo "✅ sdkmanager path:"
+          which sdkmanager || echo "❌ sdkmanager not found!"
 
+          # Accept licenses and install build tools
+          chmod +x $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
           yes | sdkmanager --licenses || true
           sdkmanager --update
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-          # Fix build-tools + sdkmanager path cho Buildozer
+          # 🔧 Fix Buildozer Android SDK structure (for old path expectation)
+          echo "🔧 Patching Buildozer SDK path..."
+          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
           mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools
           cp -r $ANDROID_HOME/build-tools/* ~/.buildozer/android/platform/android-sdk/build-tools/ || true
 
-          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
-          cp $ANDROID_HOME/cmdline-tools/latest/bin/* ~/.buildozer/android/platform/android-sdk/tools/bin/ || true
+          # Symlink sdkmanager + avdmanager to legacy location
+          ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+          ln -sf $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager ~/.buildozer/android/platform/android-sdk/tools/bin/avdmanager
 
+          # Kiểm tra aidl
           find $ANDROID_HOME -name aidl || echo "⚠️ AIDL missing!"
 
-      # 5️⃣ Build APK with Buildozer (fix tất cả lỗi cũ)
+      # 5️⃣ Build APK with Buildozer
       - name: Build APK with Buildozer
         run: |
           export ANDROID_HOME=$HOME/android-sdk
@@ -62,40 +70,27 @@ jobs:
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
           export PATH=$JAVA_HOME/bin:$PATH
 
-          echo "🧩 Checking SDK setup..."
-          sdkmanager --list || echo "⚠️ sdkmanager check failed, continuing..."
-
-          # ✅ Đảm bảo buildozer.spec luôn tồn tại
+          # Init buildozer.spec if missing
           if [ ! -f buildozer.spec ]; then
-            echo "⚙️ Creating new buildozer.spec..."
             buildozer init
           fi
 
-          # ✅ Chống lỗi “No section: buildozer” bằng cách tạo cấu hình global chuẩn
-          mkdir -p ~/.buildozer
-          cat > ~/.buildozer/global.json <<'EOF'
-          {
-            "log_level": 2,
-            "warn_on_root": 0,
-            "verbosity": 2
-          }
-          EOF
+          # Fix section error and ensure config is valid
+          if ! grep -q "^\[app\]" buildozer.spec; then
+            echo "[app]" | cat - buildozer.spec > temp && mv temp buildozer.spec
+          fi
 
-          # ✅ Sửa cấu hình cơ bản trong buildozer.spec
+          # Adjust basic settings
           sed -i 's/source.main = main.py/source.main = code.py/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = ungdungrine/' buildozer.spec
           sed -i 's/title = My Application/title = Ứng dụng của Rine/' buildozer.spec
           sed -i 's/# (str) Application versioning (method 1)/version = 1.0.0/' buildozer.spec
 
-          # ✅ Fix gradlew quyền thực thi
-          chmod +x .buildozer/android/platform/*/gradlew 2>/dev/null || true
-
           echo "🚀 Starting Buildozer build..."
-          buildozer -v android debug log_level=2 || (
+          buildozer -v android debug || (
             echo "⚠️ Build failed, retrying clean build..."
             buildozer android clean
-            chmod +x .buildozer/android/platform/*/gradlew 2>/dev/null || true
-            buildozer -v android debug log_level=2
+            buildozer -v android debug
           )
 
       # 6️⃣ Upload APK artifact
@@ -104,11 +99,3 @@ jobs:
         with:
           name: Rine-App-APK
           path: bin/*.apk
-
-      # 7️⃣ (Optional) Upload Build Log for debugging
-      - name: Upload Build Log
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Buildozer-Full-Log
-          path: .buildozer/android/platform/build*/dists/*/build.gradle || buildozer.spec

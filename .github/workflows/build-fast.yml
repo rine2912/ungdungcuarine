@@ -32,36 +32,27 @@ jobs:
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
 
-          # Download and unzip SDK tools
           wget https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip -O tools.zip
           unzip tools.zip
-          mv cmdline-tools latest  # Đặt đúng cấu trúc: cmdline-tools/latest/bin
+          mv cmdline-tools latest
 
-          # Set environment variables
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
 
-          echo "✅ sdkmanager location:"
-          which sdkmanager || echo "❌ sdkmanager not found!"
-
-          # Accept licenses and install build tools
           yes | sdkmanager --licenses || true
           sdkmanager --update
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-          # 🔧 Fix missing AIDL and build-tools path for Buildozer
           mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools
           cp -r $ANDROID_HOME/build-tools/* ~/.buildozer/android/platform/android-sdk/build-tools/ || true
 
-          # 🔧 Fix sdkmanager missing path (Buildozer expects /tools/bin)
           mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
           cp $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/ || true
           cp $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager ~/.buildozer/android/platform/android-sdk/tools/bin/ || true
 
-          # Kiểm tra aidl
           find $ANDROID_HOME -name aidl || echo "⚠️ AIDL missing!"
 
-      # 5️⃣ Build APK with Buildozer (chỉ sửa phần lỗi)
+      # 5️⃣ Build APK with Buildozer (sửa lỗi cụ thể)
       - name: Build APK with Buildozer
         run: |
           export ANDROID_HOME=$HOME/android-sdk
@@ -71,31 +62,29 @@ jobs:
 
           echo "🧩 Checking SDK setup..."
           sdkmanager --list || echo "⚠️ sdkmanager check failed, continuing..."
-          echo "AIDL path:"
-          find $ANDROID_HOME -name aidl || echo "⚠️ AIDL not found, but continue..."
 
-          # Init buildozer.spec if missing
           if [ ! -f buildozer.spec ]; then
             buildozer init
           fi
 
-          # Adjust basic settings
           sed -i 's/source.main = main.py/source.main = code.py/' buildozer.spec
           sed -i 's/package.name = myapp/package.name = ungdungrine/' buildozer.spec
           sed -i 's/title = My Application/title = Ứng dụng của Rine/' buildozer.spec
           sed -i 's/# (str) Application versioning (method 1)/version = 1.0.0/' buildozer.spec
 
-          # 🔧 Sửa lỗi Buildozer không tìm thấy sdkmanager hoặc gradlew
           mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
           cp $ANDROID_HOME/cmdline-tools/latest/bin/* ~/.buildozer/android/platform/android-sdk/tools/bin/ || true
 
-          # 🚀 Build APK
+          # ✅ FIX: Cho phép chạy gradlew và bật log chi tiết
+          chmod +x .buildozer/android/platform/build-arm64-v8a_*/gradlew || true
+          export BUILDOZER_WARN_ON_ROOT=0
+
           echo "🚀 Starting Buildozer build..."
-          buildozer -v android debug || (
-            echo "⚠️ Build failed, retrying with clean environment..."
-            rm -rf .buildozer/android/platform
+          buildozer -v android debug log_level=2 || (
+            echo "⚠️ Build failed, retrying clean build..."
             buildozer android clean
-            buildozer -v android debug
+            chmod +x .buildozer/android/platform/build-arm64-v8a_*/gradlew || true
+            buildozer -v android debug log_level=2
           )
 
           echo "✅ Build finished."
